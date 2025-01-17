@@ -1,0 +1,11 @@
+{
+  "critical": {
+    "identity": {
+      "docker-reference": "us-central1-docker.pkg.dev/burner-sahmudra/lloydsapp/my-app"
+    },
+    "image": {
+      "docker-manifest-digest": "sha256:7037361cc19f85219c854bb8959f4428c1e4f70fe513386944463a5536ddbfa7"
+    },
+    "type": "Google cloud binauthz container signature"
+  }
+}
