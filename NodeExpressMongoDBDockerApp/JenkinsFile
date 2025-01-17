@@ -1,0 +1,49 @@
+pipeline {
+    agent any
+    environment {
+        PROJECT_ID = "burner-sahmudra"
+        REPO_NAME = "lloydsapp"
+        IMAGE_NAME = "my-app"
+        IMAGE_TAG = "latest"
+        FULL_IMAGE_PATH = "us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}"
+        DOCKER_CREDENTIALS_ID = "secure_scan" // Use the new credentials
+    }
+    stages {
+        stage('Pull Container Image') {
+            steps {
+                echo "Pulling Docker image from Artifact Registry..."
+                withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    sh "echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin https://us-central1-docker.pkg.dev"
+                    sh "docker pull ${FULL_IMAGE_PATH}"
+                }
+            }
+        }
+        stage('Run Trivy Scan') {
+            steps {
+                echo "Running Trivy vulnerability scan..."
+                sh "trivy image --severity HIGH,CRITICAL --no-progress --format table -o trivy-scan-report.txt ${FULL_IMAGE_PATH}"
+                echo "Scan completed. Report saved as trivy-scan-report.txt."
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                echo "Building Docker image..."
+                sh "docker build -t ${FULL_IMAGE_PATH} ."
+            }
+        }
+        stage('Push to Artifact Registry') {
+            steps {
+                echo "Pushing Docker image to Artifact Registry..."
+                withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+                    sh "echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin https://us-central1-docker.pkg.dev"
+                    sh "docker push ${FULL_IMAGE_PATH}"
+                }
+            }
+        }
+    }
+    post {
+        always {
+            echo "Pipeline execution completed!"
+        }
+    }
+}
