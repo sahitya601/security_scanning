@@ -4,22 +4,70 @@ pipeline {
         PROJECT_ID = "burner-sahmudra"
         REPO_NAME = "lloydsapp"
         IMAGE_NAME = "my-app"
-        IMAGE_TAG = "latest"
+        IMAGE_TAG = "latest1"
         FULL_IMAGE_PATH = "us-central1-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${IMAGE_NAME}:${IMAGE_TAG}"
-        DOCKER_CREDENTIALS_ID = "secure_scan" // Use the new credentials
+        DOCKER_CREDENTIALS_ID = "google-artifact-registry-credentials" // Replace with your Artifact Registry credentials ID
     }
     stages {
-        stage('Pull Container Image') {
+        stage('Checkout Code') {
+            steps {
+                checkout([$class: 'GitSCM',
+                          branches: [[name: '*/main']],
+                          userRemoteConfigs: [[
+                              url: 'https://github.com/sahitya601/security_scanning.git'
+                          ]]])
+            }
+        }
+        stage('Build Docker Image') {
             steps {
                 script {
-                    // Switch to bash shell if required
                     sh '''
-                    echo "Pulling Docker image from Artifact Registry..."
-                    echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin https://us-central1-docker.pkg.dev
-                    docker pull ${FULL_IMAGE_PATH}
+                    echo "Building Docker image..."
+                    docker build -t ${FULL_IMAGE_PATH} .
                     '''
                 }
             }
+        }
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS_ID, 
+                                                     usernameVariable: 'DOCKER_USERNAME', 
+                                                     passwordVariable: 'DOCKER_PASSWORD')]) {
+                        sh '''
+                        echo "Logging into Google Artifact Registry..."
+                        echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin https://us-central1-docker.pkg.dev
+                        echo "Pushing Docker image..."
+                        docker push ${FULL_IMAGE_PATH}
+                        '''
+                    }
+                }
+            }
+        }
+        stage('Run Trivy Scan') {
+            steps {
+                echo "Running Trivy vulnerability scan..."
+                script {
+                    sh '''
+                    # Run Trivy scan
+                    echo "Scanning Docker image for vulnerabilities..."
+                    
+                    # Generate table format report
+                    trivy image --severity HIGH,CRITICAL --no-progress --format table -o trivy-scan-report.txt ${FULL_IMAGE_PATH}
+                    
+                    # Generate HTML format report
+                    trivy image --severity HIGH,CRITICAL --no-progress --format html -o trivy-scan-report.html ${FULL_IMAGE_PATH}
+                    
+                    echo "Scan completed. Reports saved as trivy-scan-report.txt and trivy-scan-report.html."
+                    '''
+                }
+            }
+        }
+    }
+    post {
+        always {
+            echo "Archiving Trivy Scan Reports..."
+            archiveArtifacts artifacts: 'trivy-scan-report.txt, trivy-scan-report.html', allowEmptyArchive: true
         }
     }
 }

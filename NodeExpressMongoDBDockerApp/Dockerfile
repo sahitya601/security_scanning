@@ -18,7 +18,7 @@ COPY . .
 # RUN npm run build
 
 # Step 2: Production Stage (Use a lighter image to serve the app)
-FROM node:19-alpine AS production  
+FROM node:19-alpine AS production
 
 # Set the working directory inside the container
 WORKDIR /app
@@ -28,6 +28,10 @@ COPY --from=build /app /app
 
 # Install only production dependencies
 RUN npm install --production
+
+# Install Trivy
+RUN apk add --no-cache curl \
+    && curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh
 
 # Expose the application port (adjust if necessary, e.g., 3000 for most Node.js apps)
 EXPOSE 3000
